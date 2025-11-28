@@ -28,7 +28,7 @@ const loadGoogleAPI = (): Promise<void> => {
 
     script.onload = () => {
       console.log('Google API script loaded, checking gapi object...');
-      
+
       // gapiオブジェクトが正しく読み込まれたか確認
       if (!(window as any).gapi) {
         reject(new Error('Google APIオブジェクトが見つかりません。スクリプトの読み込みに失敗した可能性があります。'));
@@ -36,7 +36,7 @@ const loadGoogleAPI = (): Promise<void> => {
       }
 
       console.log('gapi object found, initializing client:auth2...');
-      
+
       try {
         // gapi.loadの正しい使用方法：コールバック関数を直接渡す
         (window as any).gapi.load('client:auth2', (error: any) => {
@@ -114,7 +114,7 @@ const initGoogleClient = async (): Promise<void> => {
 
     // より詳細なエラーメッセージを提供
     let errorMessage = 'Google APIの初期化に失敗しました';
-    
+
     if (error?.error) {
       errorMessage += `: ${error.error}`;
     } else if (error?.message) {
@@ -130,6 +130,8 @@ const initGoogleClient = async (): Promise<void> => {
       errorMessage += '\n\n原因: OAuth同意画面が正しく設定されていません。Google Cloud ConsoleでOAuth同意画面を確認してください。';
     } else if (error?.message?.includes('redirect_uri_mismatch') || error?.error === 'redirect_uri_mismatch') {
       errorMessage += '\n\n原因: リダイレクトURIが一致しません。Google Cloud Consoleで承認済みのリダイレクトURIを確認してください。';
+    } else if (error?.message?.includes('idpiframe_initialization_failed') || error?.error === 'idpiframe_initialization_failed') {
+      errorMessage += '\n\n【idpiframe_initialization_failed エラー】\n\nこのエラーは、Google認証のiframeが初期化できない場合に発生します。\n\n対処法：\n1. ブラウザのポップアップブロッカーを無効にしてください\n2. サードパーティのCookieを許可してください\n   - Chrome: 設定 > プライバシーとセキュリティ > Cookie > サードパーティのCookieを許可\n   - Safari: 設定 > プライバシー > サードパーティのCookieをブロック（オフ）\n3. シークレットモード/プライベートモードで試してください\n4. 別のブラウザで試してください\n5. Google Cloud ConsoleでOAuth同意画面が「公開」または「テストユーザー」に設定されているか確認してください';
     }
 
     throw new Error(errorMessage);
@@ -204,7 +206,7 @@ export const signInToGoogle = async (): Promise<boolean> => {
       throw new Error('アクセスが拒否されました。権限を許可してください。');
     }
     if (error?.error === 'idpiframe_initialization_failed') {
-      throw new Error('Google認証の初期化に失敗しました。ブラウザのポップアップブロッカーを無効にしてください。');
+      throw new Error('Google認証の初期化に失敗しました。\n\n原因と対処法：\n1. ブラウザのポップアップブロッカーを無効にしてください\n2. サードパーティのCookieを許可してください（Chrome: 設定 > プライバシーとセキュリティ > Cookie）\n3. シークレットモード/プライベートモードを試してください\n4. 別のブラウザで試してください\n5. Google Cloud ConsoleでOAuth同意画面が正しく設定されているか確認してください');
     }
     if (error?.error === 'popup_blocked') {
       throw new Error('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。');
