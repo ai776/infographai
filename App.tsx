@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  BuildingOfficeIcon, 
-  SparklesIcon, 
-  BoltIcon, 
-  PhotoIcon, 
+import {
+  BuildingOfficeIcon,
+  SparklesIcon,
+  BoltIcon,
+  PhotoIcon,
   ArrowPathIcon,
   CheckCircleIcon,
   PencilSquareIcon,
@@ -16,10 +16,10 @@ import {
   TableCellsIcon
 } from '@heroicons/react/24/outline';
 import { AppState, Complexity, GeneratedImage, AppMode, PresentationPage } from './types';
-import { 
-  generateInfographics, 
-  generateSuggestions, 
-  editInfographic, 
+import {
+  generateInfographics,
+  generateSuggestions,
+  editInfographic,
   generatePresentationOutline,
   generatePresentationPageImage
 } from './services/geminiService';
@@ -51,7 +51,15 @@ const App: React.FC = () => {
   // --- API Key Management ---
   const checkApiKey = useCallback(async () => {
     // Vercel環境変数が設定されている場合は自動的に使用
-    if (import.meta.env.VITE_GEMINI_API_KEY) {
+    const envApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    console.log('Environment check:', {
+      hasEnvKey: !!envApiKey,
+      envKeyLength: envApiKey?.length || 0,
+      mode: import.meta.env.MODE
+    });
+    
+    if (envApiKey) {
+      console.log('Using environment variable for API key');
       setApiKeyReady(true);
       return;
     }
@@ -59,6 +67,10 @@ const App: React.FC = () => {
     if ((window as any).aistudio) {
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
       setApiKeyReady(hasKey);
+    } else {
+      // 環境変数もAI Studioもない場合
+      console.warn('No API key found. Please set VITE_GEMINI_API_KEY environment variable or use AI Studio.');
+      setApiKeyReady(false);
     }
   }, []);
 
@@ -81,11 +93,11 @@ const App: React.FC = () => {
     let currentRow: string[] = [];
     let currentVal = '';
     let inQuote = false;
-    
+
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
       const nextChar = text[i+1];
-      
+
       if (char === '"') {
         if (inQuote && nextChar === '"') {
           currentVal += '"';
@@ -150,12 +162,12 @@ const App: React.FC = () => {
         }
 
         const newOutline: PresentationPage[] = [];
-        
+
         for (let i = startIndex; i < rows.length; i++) {
           const cols = rows[i];
-          // Expect at least: SlideNum, Title, Content. 
+          // Expect at least: SlideNum, Title, Content.
           // If 2 cols, assume Title, Content.
-          
+
           let pageNum = newOutline.length + 1;
           let title = "";
           let content = "";
@@ -218,7 +230,7 @@ const App: React.FC = () => {
         state.referenceImage,
         state.isAnimationMode
       );
-      
+
       // Parallel fetch suggestions only if not animation mode (to save tokens)
       let suggestions: string[] = [];
       if (!state.isAnimationMode) {
@@ -263,10 +275,10 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, isGenerating: true }));
     try {
       // Generate all pages in parallel (or sequential if rate limits issue, but usually parallel is fine for 4-5 pages)
-      const imagePromises = state.presentationOutline.map(page => 
+      const imagePromises = state.presentationOutline.map(page =>
         generatePresentationPageImage(page, state.stylePreferences, state.referenceImage)
       );
-      
+
       const results = await Promise.all(imagePromises);
       const validImages = results.filter((img): img is GeneratedImage => img !== null);
 
@@ -319,7 +331,7 @@ const App: React.FC = () => {
       ...INITIAL_STATE,
       mode: mode,
       // Default counts differ by mode
-      imageCount: mode === AppMode.PRESENTATION ? 4 : 2 
+      imageCount: mode === AppMode.PRESENTATION ? 4 : 2
     });
   };
 
@@ -373,7 +385,7 @@ const App: React.FC = () => {
             </div>
             <span className="text-xl font-bold tracking-tight text-gray-900">InfographAI</span>
           </div>
-          
+
           {/* Mode Switcher */}
           <div className="flex bg-gray-100 p-1 rounded-lg">
             <button
@@ -401,7 +413,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {/* ==================== SINGLE MODE ==================== */}
         {state.mode === AppMode.SINGLE && (
           <>
@@ -418,12 +430,12 @@ const App: React.FC = () => {
                     value={state.prompt}
                     onChange={(e) => setState(prev => ({ ...prev, prompt: e.target.value }))}
                   />
-                  
+
                   {/* Animation Toggle */}
                   <div className="mt-4 flex items-center gap-2">
                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                           type="checkbox" 
+                        <input
+                           type="checkbox"
                            checked={state.isAnimationMode}
                            onChange={(e) => setState(prev => ({...prev, isAnimationMode: e.target.checked}))}
                            className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
@@ -466,8 +478,8 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                       <label className="block text-sm font-medium text-gray-700 mb-2">デザインの要望 (任意)</label>
-                      <input 
-                         type="text" 
+                      <input
+                         type="text"
                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                          placeholder="例: 全体的に青色を基調に..."
                          value={state.stylePreferences}
@@ -481,7 +493,7 @@ const App: React.FC = () => {
                          {state.referenceImage ? (
                             <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
                                <img src={state.referenceImage} className="w-full h-full object-cover" />
-                               <button 
+                               <button
                                   onClick={() => setState(prev => ({...prev, referenceImage: null}))}
                                   className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                >
@@ -494,14 +506,14 @@ const App: React.FC = () => {
                             </div>
                          )}
                          <div className="flex-1">
-                            <input 
-                               type="file" 
-                               ref={fileInputRef} 
-                               className="hidden" 
+                            <input
+                               type="file"
+                               ref={fileInputRef}
+                               className="hidden"
                                accept="image/*"
                                onChange={handleFileUpload}
                             />
-                            <button 
+                            <button
                                onClick={() => fileInputRef.current?.click()}
                                className="text-sm text-purple-600 font-medium hover:text-purple-800"
                             >
@@ -509,7 +521,7 @@ const App: React.FC = () => {
                             </button>
                             <span className="block text-xs text-gray-400 mt-1">または画像をアップロード</span>
                          </div>
-                         <button 
+                         <button
                             onClick={() => fileInputRef.current?.click()}
                             className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 text-gray-500"
                          >
@@ -524,7 +536,7 @@ const App: React.FC = () => {
                      <span className="text-sm font-medium text-gray-700">生成する画像の数</span>
                      <div className="flex rounded-lg border border-gray-200 overflow-hidden">
                         {[1, 2, 3, 4, 5, 6].map(num => (
-                           <button 
+                           <button
                               key={num}
                               onClick={() => setState(prev => ({...prev, imageCount: num}))}
                               className={`px-4 py-2 text-sm font-medium ${state.imageCount === num ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
@@ -556,7 +568,7 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Step 2 & 3 share similar view for Single Mode */}
             {(state.step === 2 || state.step === 3) && (
               <div className="space-y-6">
@@ -572,7 +584,7 @@ const App: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                        {state.generatedImages.map((img) => (
-                          <div 
+                          <div
                              key={img.id}
                              onClick={() => {
                                 handleImageSelect(img.id);
@@ -643,7 +655,7 @@ const App: React.FC = () => {
                                    onChange={(e) => setEditInstruction(e.target.value)}
                                 />
                                 <div className="mt-3 flex justify-end">
-                                   <button 
+                                   <button
                                       onClick={handleEditImage}
                                       disabled={!editInstruction || isEditing}
                                       className={`p-2 rounded-lg ${!editInstruction || isEditing ? 'text-gray-300' : 'text-purple-600 hover:bg-purple-50'}`}
@@ -701,7 +713,7 @@ const App: React.FC = () => {
                               className="hidden"
                               onChange={handleCsvUpload}
                            />
-                           <button 
+                           <button
                               onClick={() => csvInputRef.current?.click()}
                               className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
                               title="CSVファイルから構成を読み込む (スライド番号,タイトル,本文)"
@@ -711,12 +723,12 @@ const App: React.FC = () => {
                            </button>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-6">
                          <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">ページ数</label>
-                            <input 
-                               type="number" 
+                            <input
+                               type="number"
                                min="1" max="10"
                                className="w-full p-3 border border-gray-300 rounded-lg"
                                value={state.imageCount}
@@ -725,7 +737,7 @@ const App: React.FC = () => {
                          </div>
                          <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">デザインの複雑さ</label>
-                            <select 
+                            <select
                                className="w-full p-3 border border-gray-300 rounded-lg"
                                value={state.complexity}
                                onChange={(e) => setState(prev => ({...prev, complexity: e.target.value as Complexity}))}
@@ -740,8 +752,8 @@ const App: React.FC = () => {
                       <div className="grid grid-cols-2 gap-6">
                         <div>
                            <label className="block text-sm font-medium text-gray-700 mb-2">デザインの要望 (任意)</label>
-                           <input 
-                              type="text" 
+                           <input
+                              type="text"
                               className="w-full p-3 border border-gray-300 rounded-lg"
                               placeholder="例: 青基調"
                               value={state.stylePreferences}
@@ -757,15 +769,15 @@ const App: React.FC = () => {
                                     <button onClick={() => setState(prev => ({...prev, referenceImage: null}))} className="absolute inset-0 bg-black/50 text-white text-xs">×</button>
                                  </div>
                               ) : null}
-                              
+
                               <div className="flex-1">
                                  <button onClick={() => fileInputRef.current?.click()} className="w-full h-12 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-50">
                                     <PlusIcon className="w-5 h-5" />
                                  </button>
-                                 <input 
-                                    type="file" 
-                                    ref={fileInputRef} 
-                                    className="hidden" 
+                                 <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
                                     accept="image/*"
                                     onChange={handleFileUpload}
                                  />
@@ -800,7 +812,7 @@ const App: React.FC = () => {
                          <button onClick={() => goToStep(1)} className="text-sm text-gray-500 hover:text-purple-600 underline">最初からやり直す</button>
                       </div>
                       <p className="text-sm text-gray-600">各ページの構成を確認・編集できます。視覚表現・強調ポイント・温度感を調整することで、より効果的なスライドを生成できます。</p>
-                      
+
                       <div className="space-y-4">
                          {state.presentationOutline.map((page, idx) => (
                             <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -810,8 +822,8 @@ const App: React.FC = () => {
                                <div className="space-y-3">
                                   <div>
                                      <label className="text-xs font-semibold text-gray-500">タイトル</label>
-                                     <input 
-                                       type="text" 
+                                     <input
+                                       type="text"
                                        className="w-full p-2 border border-gray-300 rounded bg-white text-sm"
                                        value={page.title}
                                        onChange={(e) => handleOutlineChange(idx, 'title', e.target.value)}
@@ -819,7 +831,7 @@ const App: React.FC = () => {
                                   </div>
                                   <div>
                                      <label className="text-xs font-semibold text-gray-500">内容</label>
-                                     <textarea 
+                                     <textarea
                                        className="w-full p-2 border border-gray-300 rounded bg-white text-sm h-16 resize-none"
                                        value={page.content}
                                        onChange={(e) => handleOutlineChange(idx, 'content', e.target.value)}
@@ -867,8 +879,8 @@ const App: React.FC = () => {
                       <div className="flex items-center justify-between">
                          <h3 className="text-xl font-bold text-gray-900">生成されたプレゼンテーション</h3>
                          <div className="flex gap-2">
-                            <button 
-                                onClick={() => goToStep(2)} 
+                            <button
+                                onClick={() => goToStep(2)}
                                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2"
                             >
                                <ChevronLeftIcon className="w-4 h-4" /> 構成に戻る
