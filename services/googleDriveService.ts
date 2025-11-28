@@ -52,29 +52,56 @@ const initGoogleClient = async (): Promise<void> => {
  */
 export const signInToGoogle = async (): Promise<boolean> => {
   try {
-    await loadGoogleAPI();
-
-    // クライアントIDが設定されていない場合はエラー
+    console.log('Starting Google sign-in process...');
+    
     if (!GOOGLE_CLIENT_ID) {
-      throw new Error('Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。');
+      const errorMsg = 'Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
+    console.log('Google Client ID found');
+
+    await loadGoogleAPI();
+    console.log('Google API loaded');
 
     await initGoogleClient();
+    console.log('Google client initialized');
 
     const authInstance = (window as any).gapi.auth2.getAuthInstance();
+    if (!authInstance) {
+      throw new Error('認証インスタンスの取得に失敗しました。ページを再読み込みしてください。');
+    }
+
     const isSignedIn = authInstance.isSignedIn.get();
+    console.log('Current sign-in status:', isSignedIn);
 
     if (!isSignedIn) {
+      console.log('Attempting to sign in...');
       await authInstance.signIn();
+      console.log('Sign-in completed');
     }
 
-    return authInstance.isSignedIn.get();
+    const finalStatus = authInstance.isSignedIn.get();
+    console.log('Final sign-in status:', finalStatus);
+    return finalStatus;
   } catch (error: any) {
-    console.error('Google sign-in error:', error);
-    if (error.error === 'popup_closed_by_user') {
+    console.error('Google sign-in error details:', {
+      error,
+      message: error?.message,
+      errorCode: error?.error,
+      errorDetails: error?.details
+    });
+    
+    if (error?.error === 'popup_closed_by_user') {
       throw new Error('ログインがキャンセルされました');
     }
-    throw error;
+    if (error?.error === 'access_denied') {
+      throw new Error('アクセスが拒否されました。権限を許可してください。');
+    }
+    if (error?.message) {
+      throw error;
+    }
+    throw new Error(`ログインに失敗しました: ${error?.toString() || '不明なエラー'}`);
   }
 };
 
@@ -130,25 +157,47 @@ export const createFolderInDrive = async (
   parentFolderId?: string
 ): Promise<string> => {
   try {
+    console.log('Creating folder:', folderName, 'in parent:', parentFolderId);
+    
     if (!GOOGLE_CLIENT_ID) {
-      throw new Error('Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。');
+      const errorMsg = 'Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     await loadGoogleAPI();
     await initGoogleClient();
 
     const authInstance = (window as any).gapi.auth2.getAuthInstance();
+    if (!authInstance) {
+      throw new Error('認証インスタンスの取得に失敗しました。');
+    }
+
     if (!authInstance.isSignedIn.get()) {
+      console.log('Not signed in, attempting sign-in...');
       await signInToGoogle();
     }
 
-    const accessToken = authInstance.currentUser.get().getAuthResponse().access_token;
+    const user = authInstance.currentUser.get();
+    const authResponse = user.getAuthResponse();
     
-    const folderMetadata = {
+    if (!authResponse || !authResponse.access_token) {
+      throw new Error('アクセストークンの取得に失敗しました。再度ログインしてください。');
+    }
+
+    const accessToken = authResponse.access_token;
+    console.log('Access token obtained');
+    
+    const folderMetadata: any = {
       name: folderName,
-      mimeType: 'application/vnd.google-apps.folder',
-      ...(parentFolderId && { parents: [parentFolderId] })
+      mimeType: 'application/vnd.google-apps.folder'
     };
+    
+    if (parentFolderId) {
+      folderMetadata.parents = [parentFolderId];
+    }
+
+    console.log('Sending folder creation request:', folderMetadata);
 
     const response = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
       method: 'POST',
@@ -159,26 +208,45 @@ export const createFolderInDrive = async (
       body: JSON.stringify(folderMetadata)
     });
 
+    console.log('Folder creation response status:', response.status, response.statusText);
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Folder creation error response text:', errorText);
+      
       let error;
       try {
         error = JSON.parse(errorText);
       } catch {
         error = { error: { message: errorText || 'フォルダ作成に失敗しました' } };
       }
+      
       console.error('Folder creation error response:', error);
+      
+      if (response.status === 403) {
+        throw new Error('フォルダ作成の権限がありません。Googleドライブのアクセス権限を確認してください。');
+      }
+      if (response.status === 401) {
+        throw new Error('認証に失敗しました。再度ログインしてください。');
+      }
+      
       throw new Error(error.error?.message || `フォルダ作成に失敗しました (HTTP ${response.status})`);
     }
 
     const result = await response.json();
+    console.log('Folder created successfully:', result);
     return result.id;
   } catch (error: any) {
-    console.error('Folder creation error:', error);
+    console.error('Folder creation error details:', {
+      error,
+      message: error?.message,
+      stack: error?.stack
+    });
+    
     if (error.message) {
       throw error;
     }
-    throw new Error('フォルダ作成に失敗しました: ' + (error.toString() || '不明なエラー'));
+    throw new Error('フォルダ作成に失敗しました: ' + (error?.toString() || '不明なエラー'));
   }
 };
 
@@ -191,19 +259,40 @@ export const uploadImageToDriveInFolder = async (
   folderId: string
 ): Promise<string> => {
   try {
+    console.log('Uploading image:', fileName, 'to folder:', folderId);
+    
     if (!GOOGLE_CLIENT_ID) {
-      throw new Error('Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。');
+      const errorMsg = 'Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     await loadGoogleAPI();
     await initGoogleClient();
 
     const authInstance = (window as any).gapi.auth2.getAuthInstance();
+    if (!authInstance) {
+      throw new Error('認証インスタンスの取得に失敗しました。');
+    }
+
     if (!authInstance.isSignedIn.get()) {
+      console.log('Not signed in, attempting sign-in...');
       await signInToGoogle();
     }
 
+    const user = authInstance.currentUser.get();
+    const authResponse = user.getAuthResponse();
+    
+    if (!authResponse || !authResponse.access_token) {
+      throw new Error('アクセストークンの取得に失敗しました。再度ログインしてください。');
+    }
+
+    const accessToken = authResponse.access_token;
+    console.log('Access token obtained for upload');
+
     const blob = base64ToBlob(imageDataUrl);
+    console.log('Blob created, size:', blob.size);
+    
     const metadata = {
       name: fileName,
       parents: [folderId]
@@ -213,7 +302,7 @@ export const uploadImageToDriveInFolder = async (
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
     form.append('file', blob);
 
-    const accessToken = authInstance.currentUser.get().getAuthResponse().access_token;
+    console.log('Sending upload request...');
     const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
       method: 'POST',
       headers: {
@@ -222,26 +311,49 @@ export const uploadImageToDriveInFolder = async (
       body: form
     });
 
+    console.log('Upload response status:', response.status, response.statusText);
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Upload error response text:', errorText);
+      
       let error;
       try {
         error = JSON.parse(errorText);
       } catch {
         error = { error: { message: errorText || 'アップロードに失敗しました' } };
       }
+      
       console.error('Upload error response:', error);
+      
+      if (response.status === 403) {
+        throw new Error('アップロードの権限がありません。Googleドライブのアクセス権限を確認してください。');
+      }
+      if (response.status === 401) {
+        throw new Error('認証に失敗しました。再度ログインしてください。');
+      }
+      if (response.status === 404) {
+        throw new Error('フォルダが見つかりません。フォルダIDを確認してください。');
+      }
+      
       throw new Error(error.error?.message || `アップロードに失敗しました (HTTP ${response.status})`);
     }
 
     const result = await response.json();
+    console.log('Upload successful:', result);
     return `https://drive.google.com/file/d/${result.id}/view`;
   } catch (error: any) {
-    console.error('Upload error:', error);
+    console.error('Upload error details:', {
+      error,
+      message: error?.message,
+      stack: error?.stack,
+      fileName
+    });
+    
     if (error.message) {
       throw error;
     }
-    throw new Error('アップロードに失敗しました: ' + (error.toString() || '不明なエラー'));
+    throw new Error('アップロードに失敗しました: ' + (error?.toString() || '不明なエラー'));
   }
 };
 

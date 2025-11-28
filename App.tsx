@@ -23,12 +23,12 @@ import {
   generatePresentationOutline,
   generatePresentationPageImage
 } from './services/geminiService';
-import { 
-  uploadImagesToDrive, 
+import {
+  uploadImagesToDrive,
   uploadImagesToDriveInFolder,
   createFolderInDrive,
-  signInToGoogle, 
-  isSignedIn 
+  signInToGoogle,
+  isSignedIn
 } from './services/googleDriveService';
 
 const INITIAL_STATE: AppState = {
@@ -371,7 +371,7 @@ const App: React.FC = () => {
       // フォルダ名を生成（yymmdd_{作成物の概要}）
       const now = new Date();
       const yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-      
+
       let folderName = '';
       if (state.mode === AppMode.PRESENTATION) {
         const summary = state.prompt || state.presentationOutline[0]?.title || 'プレゼン資料';
@@ -389,7 +389,7 @@ const App: React.FC = () => {
         let fileName = '';
         if (state.mode === AppMode.PRESENTATION) {
           const pageInfo = state.presentationOutline[idx];
-          fileName = pageInfo 
+          fileName = pageInfo
             ? `${String(idx + 1).padStart(2, '0')}_${pageInfo.title.replace(/[^\w\s]/g, '_')}.png`
             : `${String(idx + 1).padStart(2, '0')}_スライド.png`;
         } else {
@@ -408,10 +408,26 @@ const App: React.FC = () => {
       setDriveSaveStatus(`✅ ${fileUrls.length}枚の画像をGoogleドライブに保存しました`);
       alert(`${fileUrls.length}枚の画像をGoogleドライブに保存しました！\nフォルダ: ${folderUrl}`);
     } catch (error: any) {
-      console.error('Google Drive保存エラー:', error);
+      console.error('Google Drive保存エラー詳細:', {
+        error,
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name
+      });
       setDriveSaveStatus('❌ 保存に失敗しました');
-      const errorMessage = error.message || '不明なエラー';
-      alert(`Googleドライブへの保存に失敗しました: ${errorMessage}\n\n詳細はブラウザのコンソールを確認してください。`);
+      const errorMessage = error?.message || error?.toString() || '不明なエラー';
+      
+      // より詳細なエラーメッセージを表示
+      let userFriendlyMessage = errorMessage;
+      if (errorMessage.includes('Client ID')) {
+        userFriendlyMessage = 'Google Client IDが設定されていません。Vercelの環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
+      } else if (errorMessage.includes('権限')) {
+        userFriendlyMessage = 'Googleドライブへのアクセス権限がありません。ログイン時に権限を許可してください。';
+      } else if (errorMessage.includes('認証')) {
+        userFriendlyMessage = '認証に失敗しました。再度ログインを試してください。';
+      }
+      
+      alert(`Googleドライブへの保存に失敗しました\n\n${userFriendlyMessage}\n\n詳細はブラウザのコンソール（F12）を確認してください。`);
     } finally {
       setIsSavingToDrive(false);
     }
@@ -691,7 +707,7 @@ const App: React.FC = () => {
                              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">2</span>
                              <h2 className="text-xl font-bold text-gray-900">ブラッシュアップ (編集) & PPT作成</h2>
                           </div>
-                          <button 
+                          <button
                             onClick={handleSaveToDrive}
                             disabled={isSavingToDrive}
                             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
