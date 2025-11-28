@@ -53,7 +53,7 @@ const initGoogleClient = async (): Promise<void> => {
 export const signInToGoogle = async (): Promise<boolean> => {
   try {
     console.log('Starting Google sign-in process...');
-    
+
     if (!GOOGLE_CLIENT_ID) {
       const errorMsg = 'Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
       console.error(errorMsg);
@@ -91,7 +91,7 @@ export const signInToGoogle = async (): Promise<boolean> => {
       errorCode: error?.error,
       errorDetails: error?.details
     });
-    
+
     if (error?.error === 'popup_closed_by_user') {
       throw new Error('ログインがキャンセルされました');
     }
@@ -158,7 +158,7 @@ export const createFolderInDrive = async (
 ): Promise<string> => {
   try {
     console.log('Creating folder:', folderName, 'in parent:', parentFolderId);
-    
+
     if (!GOOGLE_CLIENT_ID) {
       const errorMsg = 'Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
       console.error(errorMsg);
@@ -180,19 +180,19 @@ export const createFolderInDrive = async (
 
     const user = authInstance.currentUser.get();
     const authResponse = user.getAuthResponse();
-    
+
     if (!authResponse || !authResponse.access_token) {
       throw new Error('アクセストークンの取得に失敗しました。再度ログインしてください。');
     }
 
     const accessToken = authResponse.access_token;
     console.log('Access token obtained');
-    
+
     const folderMetadata: any = {
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder'
     };
-    
+
     if (parentFolderId) {
       folderMetadata.parents = [parentFolderId];
     }
@@ -213,23 +213,23 @@ export const createFolderInDrive = async (
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Folder creation error response text:', errorText);
-      
+
       let error;
       try {
         error = JSON.parse(errorText);
       } catch {
         error = { error: { message: errorText || 'フォルダ作成に失敗しました' } };
       }
-      
+
       console.error('Folder creation error response:', error);
-      
+
       if (response.status === 403) {
         throw new Error('フォルダ作成の権限がありません。Googleドライブのアクセス権限を確認してください。');
       }
       if (response.status === 401) {
         throw new Error('認証に失敗しました。再度ログインしてください。');
       }
-      
+
       throw new Error(error.error?.message || `フォルダ作成に失敗しました (HTTP ${response.status})`);
     }
 
@@ -242,7 +242,7 @@ export const createFolderInDrive = async (
       message: error?.message,
       stack: error?.stack
     });
-    
+
     if (error.message) {
       throw error;
     }
@@ -260,7 +260,7 @@ export const uploadImageToDriveInFolder = async (
 ): Promise<string> => {
   try {
     console.log('Uploading image:', fileName, 'to folder:', folderId);
-    
+
     if (!GOOGLE_CLIENT_ID) {
       const errorMsg = 'Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。';
       console.error(errorMsg);
@@ -282,7 +282,7 @@ export const uploadImageToDriveInFolder = async (
 
     const user = authInstance.currentUser.get();
     const authResponse = user.getAuthResponse();
-    
+
     if (!authResponse || !authResponse.access_token) {
       throw new Error('アクセストークンの取得に失敗しました。再度ログインしてください。');
     }
@@ -292,7 +292,7 @@ export const uploadImageToDriveInFolder = async (
 
     const blob = base64ToBlob(imageDataUrl);
     console.log('Blob created, size:', blob.size);
-    
+
     const metadata = {
       name: fileName,
       parents: [folderId]
@@ -316,16 +316,16 @@ export const uploadImageToDriveInFolder = async (
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Upload error response text:', errorText);
-      
+
       let error;
       try {
         error = JSON.parse(errorText);
       } catch {
         error = { error: { message: errorText || 'アップロードに失敗しました' } };
       }
-      
+
       console.error('Upload error response:', error);
-      
+
       if (response.status === 403) {
         throw new Error('アップロードの権限がありません。Googleドライブのアクセス権限を確認してください。');
       }
@@ -335,7 +335,7 @@ export const uploadImageToDriveInFolder = async (
       if (response.status === 404) {
         throw new Error('フォルダが見つかりません。フォルダIDを確認してください。');
       }
-      
+
       throw new Error(error.error?.message || `アップロードに失敗しました (HTTP ${response.status})`);
     }
 
@@ -349,7 +349,7 @@ export const uploadImageToDriveInFolder = async (
       stack: error?.stack,
       fileName
     });
-    
+
     if (error.message) {
       throw error;
     }

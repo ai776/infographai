@@ -353,8 +353,24 @@ const App: React.FC = () => {
 
   // Google Drive保存ハンドラー
   const handleSaveToDrive = async () => {
+    console.log('handleSaveToDrive called');
+    
     if (state.generatedImages.length === 0) {
       alert('保存する画像がありません');
+      return;
+    }
+
+    // Google Client IDのチェック
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    console.log('Google Client ID check:', {
+      exists: !!googleClientId,
+      length: googleClientId?.length || 0
+    });
+
+    if (!googleClientId) {
+      const errorMsg = 'Google Client IDが設定されていません。\n\nVercelの環境変数に以下を設定してください：\n- 名前: VITE_GOOGLE_CLIENT_ID\n- 値: Google Cloud Consoleで作成したOAuth 2.0クライアントID\n\n設定後、再デプロイが必要です。';
+      alert(errorMsg);
+      setDriveSaveStatus('❌ Google Client IDが設定されていません');
       return;
     }
 
@@ -362,9 +378,15 @@ const App: React.FC = () => {
     setDriveSaveStatus('');
 
     try {
+      console.log('Starting Google Drive save process...');
+      
       // Googleにサインイン確認
+      console.log('Checking sign-in status...');
       const signedIn = await isSignedIn();
+      console.log('Sign-in status:', signedIn);
+      
       if (!signedIn) {
+        console.log('Not signed in, attempting sign-in...');
         await signInToGoogle();
       }
 
@@ -382,7 +404,9 @@ const App: React.FC = () => {
       }
 
       setDriveSaveStatus('フォルダ作成中...');
+      console.log('Creating folder:', folderName);
       const folderId = await createFolderInDrive(folderName, '1jHWaqo50qd68ko8fMoWtDbp7LQfG_0pA');
+      console.log('Folder created with ID:', folderId);
 
       // 画像をアップロード
       const imagesToUpload = state.generatedImages.map((img, idx) => {
@@ -416,7 +440,7 @@ const App: React.FC = () => {
       });
       setDriveSaveStatus('❌ 保存に失敗しました');
       const errorMessage = error?.message || error?.toString() || '不明なエラー';
-      
+
       // より詳細なエラーメッセージを表示
       let userFriendlyMessage = errorMessage;
       if (errorMessage.includes('Client ID')) {
@@ -426,7 +450,7 @@ const App: React.FC = () => {
       } else if (errorMessage.includes('認証')) {
         userFriendlyMessage = '認証に失敗しました。再度ログインを試してください。';
       }
-      
+
       alert(`Googleドライブへの保存に失敗しました\n\n${userFriendlyMessage}\n\n詳細はブラウザのコンソール（F12）を確認してください。`);
     } finally {
       setIsSavingToDrive(false);
