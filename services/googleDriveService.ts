@@ -25,32 +25,26 @@ const loadGoogleAPI = (): Promise<void> => {
     script.src = 'https://apis.google.com/js/api.js';
     script.async = true;
     script.defer = true;
-    
+
     script.onload = () => {
       console.log('Google API script loaded, initializing client:auth2...');
       try {
-        (window as any).gapi.load('client:auth2', {
-          callback: () => {
-            console.log('Google API client:auth2 loaded successfully');
-            resolve();
-          },
-          onerror: (error: any) => {
-            console.error('Error loading client:auth2:', error);
-            reject(new Error('Google APIの読み込みに失敗しました: ' + (error?.message || '不明なエラー')));
-          },
-          timeout: 10000
+        // gapi.loadの正しい使用方法：コールバック関数を直接渡す
+        (window as any).gapi.load('client:auth2', () => {
+          console.log('Google API client:auth2 loaded successfully');
+          resolve();
         });
       } catch (error: any) {
         console.error('Error in gapi.load:', error);
         reject(new Error('Google APIの初期化に失敗しました: ' + (error?.message || '不明なエラー')));
       }
     };
-    
+
     script.onerror = (error) => {
       console.error('Error loading Google API script:', error);
       reject(new Error('Google APIスクリプトの読み込みに失敗しました。ネットワーク接続を確認してください。'));
     };
-    
+
     document.head.appendChild(script);
   });
 };
@@ -136,7 +130,7 @@ export const signInToGoogle = async (): Promise<boolean> => {
       errorType: error?.type,
       fullError: JSON.stringify(error, null, 2)
     });
-    
+
     // エラーの種類に応じたメッセージ
     if (error?.error === 'popup_closed_by_user') {
       throw new Error('ログインポップアップが閉じられました。再度お試しください。');
