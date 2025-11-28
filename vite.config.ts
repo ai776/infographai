@@ -10,10 +10,8 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
+      // Viteでは環境変数は自動的にimport.meta.envに注入される
+      // VITE_プレフィックス付きの環境変数のみクライアント側で利用可能
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

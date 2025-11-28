@@ -50,6 +50,12 @@ const App: React.FC = () => {
 
   // --- API Key Management ---
   const checkApiKey = useCallback(async () => {
+    // Vercel環境変数が設定されている場合は自動的に使用
+    if (import.meta.env.VITE_GEMINI_API_KEY) {
+      setApiKeyReady(true);
+      return;
+    }
+    // AI Studio環境の場合
     if ((window as any).aistudio) {
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
       setApiKeyReady(hasKey);

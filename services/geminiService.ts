@@ -3,9 +3,10 @@ import { Complexity, GeneratedImage, PresentationPage } from "../types";
 
 // Helper to get client instance with current key
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Vercel環境変数から読み取る（VITE_プレフィックスが必要）
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).aistudio?.getApiKey?.();
   if (!apiKey) {
-    throw new Error("APIキーが見つかりません。キーを選択してください。");
+    throw new Error("APIキーが見つかりません。環境変数VITE_GEMINI_API_KEYを設定するか、キーを選択してください。");
   }
   return new GoogleGenAI({ apiKey });
 };
