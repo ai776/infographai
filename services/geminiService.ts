@@ -50,13 +50,13 @@ export const generatePresentationOutline = async (
   complexity: Complexity
 ): Promise<PresentationPage[]> => {
   const ai = getAiClient();
-  
+
   const prompt = `あなたはプロのプレゼンテーション構成作家です。
   以下のテーマで${pageCount}枚のプレゼンテーション資料の構成を作成してください。
-  
+
   テーマ: ${topic}
   複雑さ: ${complexity}
-  
+
   各ページについて、以下の要素を含むJSON配列を返してください:
   - pageNumber: ページ番号
   - title: スライドのタイトル
@@ -160,14 +160,14 @@ export const generateInfographics = async (
     }
   }
 
-  // We generate sequentially or in parallel depending on requirements. 
-  // For animation/reference consistency, sometimes single request with multiple images is better, 
+  // We generate sequentially or in parallel depending on requirements.
+  // For animation/reference consistency, sometimes single request with multiple images is better,
   // but Gemini API currently generates one main image per 'generateContent' usually unless requested otherwise or via Imagen.
   // We will loop.
-  
+
   const promises = Array.from({ length: count }).map(async (_, index) => {
     try {
-      const currentPrompt = isAnimationMode 
+      const currentPrompt = isAnimationMode
         ? `${fullPrompt}\nこれはアニメーションのステップ ${index + 1} / ${count} です。前のステップの要素を含みつつ、新しい情報を追加してください。`
         : fullPrompt;
 
@@ -219,7 +219,7 @@ export const generatePresentationPageImage = async (
   referenceImage: string | null
 ): Promise<GeneratedImage | null> => {
   const ai = getAiClient();
-  
+
   // Use fallbacks if specific instructions are missing (e.g. from CSV import)
   const visualCue = page.visualCue || "スライドの内容を効果的に伝える、プロフェッショナルなビジュアルや図解を自動的に生成してください。";
   const emphasis = page.emphasis || "内容の要点を視覚的に強調する";
@@ -229,12 +229,12 @@ export const generatePresentationPageImage = async (
   ページ: ${page.pageNumber}
   タイトル: ${page.title}
   内容: ${page.content}
-  
+
   視覚表現の指示: ${visualCue}
   強調ポイント: ${emphasis}
   温度感: ${mood}
   スタイル: ${style}
-  
+
   文字は日本語で、読みやすく配置してください。インフォグラフィック要素を取り入れてください。`;
 
   const parts: any[] = [{ text: prompt }];
@@ -291,11 +291,11 @@ export const editInfographic = async (
 ): Promise<GeneratedImage | null> => {
   try {
     const ai = getAiClient();
-    
+
     // Extract base64 data and mime type
     const match = base64Image.match(/^data:(.+);base64,(.+)$/);
     if (!match) throw new Error("Invalid base64 image data");
-    
+
     const mimeType = match[1];
     const data = match[2];
 

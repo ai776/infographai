@@ -23,6 +23,7 @@ import {
   generatePresentationOutline,
   generatePresentationPageImage
 } from './services/geminiService';
+import { uploadImagesToDrive, signInToGoogle, isSignedIn } from './services/googleDriveService';
 
 const INITIAL_STATE: AppState = {
   mode: AppMode.SINGLE,
@@ -45,6 +46,8 @@ const App: React.FC = () => {
   const [apiKeyReady, setApiKeyReady] = useState<boolean>(false);
   const [editInstruction, setEditInstruction] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [isSavingToDrive, setIsSavingToDrive] = useState<boolean>(false);
+  const [driveSaveStatus, setDriveSaveStatus] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,7 +60,7 @@ const App: React.FC = () => {
       envKeyLength: envApiKey?.length || 0,
       mode: import.meta.env.MODE
     });
-    
+
     if (envApiKey) {
       console.log('Using environment variable for API key');
       setApiKeyReady(true);
@@ -340,6 +343,49 @@ const App: React.FC = () => {
     if (field === 'pageNumber') return; // Read only
     (newOutline[index] as any)[field] = value;
     setState(prev => ({ ...prev, presentationOutline: newOutline }));
+  };
+
+  // Google Drive保存ハンドラー
+  const handleSaveToDrive = async () => {
+    if (state.generatedImages.length === 0) {
+      alert('保存する画像がありません');
+      return;
+    }
+
+    setIsSavingToDrive(true);
+    setDriveSaveStatus('');
+
+    try {
+      // Googleにサインイン確認
+      const signedIn = await isSignedIn();
+      if (!signedIn) {
+        await signInToGoogle();
+      }
+
+      // 画像をアップロード
+      const imagesToUpload = state.generatedImages.map((img, idx) => {
+        const pageInfo = state.presentationOutline[idx];
+        const fileName = pageInfo 
+          ? `プレゼン_${pageInfo.pageNumber}_${pageInfo.title.replace(/[^\w\s]/g, '_')}.png`
+          : `プレゼン_${idx + 1}.png`;
+        return {
+          url: img.url,
+          name: fileName
+        };
+      });
+
+      setDriveSaveStatus('アップロード中...');
+      const fileUrls = await uploadImagesToDrive(imagesToUpload);
+      
+      setDriveSaveStatus(`✅ ${fileUrls.length}枚の画像をGoogleドライブに保存しました`);
+      alert(`${fileUrls.length}枚の画像をGoogleドライブに保存しました！\nフォルダ: https://drive.google.com/drive/folders/1jHWaqo50qd68ko8fMoWtDbp7LQfG_0pA`);
+    } catch (error: any) {
+      console.error('Google Drive保存エラー:', error);
+      setDriveSaveStatus('❌ 保存に失敗しました');
+      alert(`Googleドライブへの保存に失敗しました: ${error.message || '不明なエラー'}`);
+    } finally {
+      setIsSavingToDrive(false);
+    }
   };
 
   // --- Renders ---
@@ -736,16 +782,33 @@ const App: React.FC = () => {
                             />
                          </div>
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">デザインの複雑さ</label>
-                            <select
-                               className="w-full p-3 border border-gray-300 rounded-lg"
-                               value={state.complexity}
-                               onChange={(e) => setState(prev => ({...prev, complexity: e.target.value as Complexity}))}
-                            >
-                               <option value={Complexity.STANDARD}>しっかり (標準)</option>
-                               <option value={Complexity.LIGHT}>ライトめ</option>
-                               <option value={Complexity.SIMPLE}>非常にシンプル</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-3">デザインの複雑さ</label>
+                            <div className="grid grid-cols-3 gap-3">
+                              <button
+                                 onClick={() => setState(prev => ({ ...prev, complexity: Complexity.STANDARD }))}
+                                 className={`p-4 rounded-xl border-2 text-left transition-all ${state.complexity === Complexity.STANDARD ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-purple-300'}`}
+                              >
+                                 <BuildingOfficeIcon className={`w-6 h-6 mb-2 ${state.complexity === Complexity.STANDARD ? 'text-purple-600' : 'text-gray-400'}`} />
+                                 <div className="font-semibold text-sm text-gray-900">しっかり（標準）</div>
+                                 <div className="text-xs text-gray-500 mt-1">ビジネス向け・詳細</div>
+                              </button>
+                              <button
+                                 onClick={() => setState(prev => ({ ...prev, complexity: Complexity.LIGHT }))}
+                                 className={`p-4 rounded-xl border-2 text-left transition-all ${state.complexity === Complexity.LIGHT ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-purple-300'}`}
+                              >
+                                 <SparklesIcon className={`w-6 h-6 mb-2 ${state.complexity === Complexity.LIGHT ? 'text-purple-600' : 'text-gray-400'}`} />
+                                 <div className="font-semibold text-sm text-gray-900">ライトめ</div>
+                                 <div className="text-xs text-gray-500 mt-1">シンプル・親しみ</div>
+                              </button>
+                              <button
+                                 onClick={() => setState(prev => ({ ...prev, complexity: Complexity.SIMPLE }))}
+                                 className={`p-4 rounded-xl border-2 text-left transition-all ${state.complexity === Complexity.SIMPLE ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-purple-300'}`}
+                              >
+                                 <BoltIcon className={`w-6 h-6 mb-2 ${state.complexity === Complexity.SIMPLE ? 'text-purple-600' : 'text-gray-400'}`} />
+                                 <div className="font-semibold text-sm text-gray-900">非常にシンプル</div>
+                                 <div className="text-xs text-gray-500 mt-1">要点のみ・インパクト</div>
+                              </button>
+                            </div>
                          </div>
                       </div>
 
@@ -885,12 +948,32 @@ const App: React.FC = () => {
                             >
                                <ChevronLeftIcon className="w-4 h-4" /> 構成に戻る
                             </button>
+                            <button 
+                              onClick={handleSaveToDrive}
+                              disabled={isSavingToDrive}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                               {isSavingToDrive ? (
+                                 <>
+                                   <ArrowPathIcon className="w-5 h-5 animate-spin" /> 保存中...
+                                 </>
+                               ) : (
+                                 <>
+                                   <ArrowDownTrayIcon className="w-5 h-5" /> Googleドライブに保存
+                                 </>
+                               )}
+                            </button>
                             <button className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
                                <PresentationChartLineIcon className="w-5 h-5" /> PPTダウンロード
                             </button>
                             <button onClick={() => switchMode(AppMode.PRESENTATION)} className="text-gray-500 hover:text-gray-900 px-4 py-2 text-sm">新しく作成</button>
                          </div>
                       </div>
+                      {driveSaveStatus && (
+                        <div className={`p-3 rounded-lg text-sm ${driveSaveStatus.includes('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                          {driveSaveStatus}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                          {state.generatedImages.map((img, idx) => {
