@@ -23,7 +23,13 @@ import {
   generatePresentationOutline,
   generatePresentationPageImage
 } from './services/geminiService';
-import { uploadImagesToDrive, signInToGoogle, isSignedIn } from './services/googleDriveService';
+import { 
+  uploadImagesToDrive, 
+  uploadImagesToDriveInFolder,
+  createFolderInDrive,
+  signInToGoogle, 
+  isSignedIn 
+} from './services/googleDriveService';
 
 const INITIAL_STATE: AppState = {
   mode: AppMode.SINGLE,
@@ -362,12 +368,33 @@ const App: React.FC = () => {
         await signInToGoogle();
       }
 
+      // フォルダ名を生成（yymmdd_{作成物の概要}）
+      const now = new Date();
+      const yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      
+      let folderName = '';
+      if (state.mode === AppMode.PRESENTATION) {
+        const summary = state.prompt || state.presentationOutline[0]?.title || 'プレゼン資料';
+        folderName = `${yymmdd}_${summary.substring(0, 30).replace(/[^\w\s]/g, '_')}`;
+      } else {
+        const summary = state.prompt || '1枚絵';
+        folderName = `${yymmdd}_${summary.substring(0, 30).replace(/[^\w\s]/g, '_')}`;
+      }
+
+      setDriveSaveStatus('フォルダ作成中...');
+      const folderId = await createFolderInDrive(folderName, '1jHWaqo50qd68ko8fMoWtDbp7LQfG_0pA');
+
       // 画像をアップロード
       const imagesToUpload = state.generatedImages.map((img, idx) => {
-        const pageInfo = state.presentationOutline[idx];
-        const fileName = pageInfo 
-          ? `プレゼン_${pageInfo.pageNumber}_${pageInfo.title.replace(/[^\w\s]/g, '_')}.png`
-          : `プレゼン_${idx + 1}.png`;
+        let fileName = '';
+        if (state.mode === AppMode.PRESENTATION) {
+          const pageInfo = state.presentationOutline[idx];
+          fileName = pageInfo 
+            ? `${String(idx + 1).padStart(2, '0')}_${pageInfo.title.replace(/[^\w\s]/g, '_')}.png`
+            : `${String(idx + 1).padStart(2, '0')}_スライド.png`;
+        } else {
+          fileName = `画像_${String(idx + 1).padStart(2, '0')}.png`;
+        }
         return {
           url: img.url,
           name: fileName
@@ -375,14 +402,16 @@ const App: React.FC = () => {
       });
 
       setDriveSaveStatus('アップロード中...');
-      const fileUrls = await uploadImagesToDrive(imagesToUpload);
-      
+      const fileUrls = await uploadImagesToDriveInFolder(imagesToUpload, folderId);
+
+      const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
       setDriveSaveStatus(`✅ ${fileUrls.length}枚の画像をGoogleドライブに保存しました`);
-      alert(`${fileUrls.length}枚の画像をGoogleドライブに保存しました！\nフォルダ: https://drive.google.com/drive/folders/1jHWaqo50qd68ko8fMoWtDbp7LQfG_0pA`);
+      alert(`${fileUrls.length}枚の画像をGoogleドライブに保存しました！\nフォルダ: ${folderUrl}`);
     } catch (error: any) {
       console.error('Google Drive保存エラー:', error);
       setDriveSaveStatus('❌ 保存に失敗しました');
-      alert(`Googleドライブへの保存に失敗しました: ${error.message || '不明なエラー'}`);
+      const errorMessage = error.message || '不明なエラー';
+      alert(`Googleドライブへの保存に失敗しました: ${errorMessage}\n\n詳細はブラウザのコンソールを確認してください。`);
     } finally {
       setIsSavingToDrive(false);
     }
@@ -657,10 +686,32 @@ const App: React.FC = () => {
                  {/* Editor Area (Only visible if selected) */}
                  {state.step === 3 && selectedImage && (
                     <div className="mt-12 animate-fade-in">
-                       <div className="flex items-center gap-4 mb-6">
-                          <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">2</span>
-                          <h2 className="text-xl font-bold text-gray-900">ブラッシュアップ (編集) & PPT作成</h2>
+                       <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-4">
+                             <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">2</span>
+                             <h2 className="text-xl font-bold text-gray-900">ブラッシュアップ (編集) & PPT作成</h2>
+                          </div>
+                          <button 
+                            onClick={handleSaveToDrive}
+                            disabled={isSavingToDrive}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isSavingToDrive ? (
+                              <>
+                                <ArrowPathIcon className="w-5 h-5 animate-spin" /> 保存中...
+                              </>
+                            ) : (
+                              <>
+                                <ArrowDownTrayIcon className="w-5 h-5" /> Googleドライブに保存
+                              </>
+                            )}
+                          </button>
                        </div>
+                       {driveSaveStatus && (
+                         <div className={`mb-4 p-3 rounded-lg text-sm ${driveSaveStatus.includes('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                           {driveSaveStatus}
+                         </div>
+                       )}
 
                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                           <div className="lg:col-span-2">
@@ -876,6 +927,37 @@ const App: React.FC = () => {
                       </div>
                       <p className="text-sm text-gray-600">各ページの構成を確認・編集できます。視覚表現・強調ポイント・温度感を調整することで、より効果的なスライドを生成できます。</p>
 
+                      {/* 複雑さ選択 */}
+                      <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-3">デザインの複雑さ</label>
+                         <div className="grid grid-cols-3 gap-3">
+                           <button
+                              onClick={() => setState(prev => ({ ...prev, complexity: Complexity.STANDARD }))}
+                              className={`p-4 rounded-xl border-2 text-left transition-all ${state.complexity === Complexity.STANDARD ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-purple-300'}`}
+                           >
+                              <BuildingOfficeIcon className={`w-6 h-6 mb-2 ${state.complexity === Complexity.STANDARD ? 'text-purple-600' : 'text-gray-400'}`} />
+                              <div className="font-semibold text-sm text-gray-900">しっかり（標準）</div>
+                              <div className="text-xs text-gray-500 mt-1">ビジネス向け・詳細</div>
+                           </button>
+                           <button
+                              onClick={() => setState(prev => ({ ...prev, complexity: Complexity.LIGHT }))}
+                              className={`p-4 rounded-xl border-2 text-left transition-all ${state.complexity === Complexity.LIGHT ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-purple-300'}`}
+                           >
+                              <SparklesIcon className={`w-6 h-6 mb-2 ${state.complexity === Complexity.LIGHT ? 'text-purple-600' : 'text-gray-400'}`} />
+                              <div className="font-semibold text-sm text-gray-900">ライトめ</div>
+                              <div className="text-xs text-gray-500 mt-1">シンプル・親しみ</div>
+                           </button>
+                           <button
+                              onClick={() => setState(prev => ({ ...prev, complexity: Complexity.SIMPLE }))}
+                              className={`p-4 rounded-xl border-2 text-left transition-all ${state.complexity === Complexity.SIMPLE ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-purple-300'}`}
+                           >
+                              <BoltIcon className={`w-6 h-6 mb-2 ${state.complexity === Complexity.SIMPLE ? 'text-purple-600' : 'text-gray-400'}`} />
+                              <div className="font-semibold text-sm text-gray-900">非常にシンプル</div>
+                              <div className="text-xs text-gray-500 mt-1">要点のみ・インパクト</div>
+                           </button>
+                         </div>
+                      </div>
+
                       <div className="space-y-4">
                          {state.presentationOutline.map((page, idx) => (
                             <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -948,7 +1030,7 @@ const App: React.FC = () => {
                             >
                                <ChevronLeftIcon className="w-4 h-4" /> 構成に戻る
                             </button>
-                            <button 
+                            <button
                               onClick={handleSaveToDrive}
                               disabled={isSavingToDrive}
                               className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
