@@ -1,0 +1,5 @@
+{
+  "name": "InfographAI",
+  "description": "テキストのアウトラインからプロフェッショナルなプレゼンテーションスライドやインフォグラフィックを生成するAI搭載ツール。",
+  "requestFramePermissions": []
+}
