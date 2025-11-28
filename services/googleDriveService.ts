@@ -15,18 +15,42 @@ const SCOPES = 'https://www.googleapis.com/auth/drive';
 const loadGoogleAPI = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     if ((window as any).gapi) {
+      console.log('Google API already loaded');
       resolve();
       return;
     }
 
+    console.log('Loading Google API script...');
     const script = document.createElement('script');
     script.src = 'https://apis.google.com/js/api.js';
+    script.async = true;
+    script.defer = true;
+    
     script.onload = () => {
-      (window as any).gapi.load('client:auth2', () => {
-        resolve();
-      });
-      script.onerror = reject;
+      console.log('Google API script loaded, initializing client:auth2...');
+      try {
+        (window as any).gapi.load('client:auth2', {
+          callback: () => {
+            console.log('Google API client:auth2 loaded successfully');
+            resolve();
+          },
+          onerror: (error: any) => {
+            console.error('Error loading client:auth2:', error);
+            reject(new Error('Google APIの読み込みに失敗しました: ' + (error?.message || '不明なエラー')));
+          },
+          timeout: 10000
+        });
+      } catch (error: any) {
+        console.error('Error in gapi.load:', error);
+        reject(new Error('Google APIの初期化に失敗しました: ' + (error?.message || '不明なエラー')));
+      }
     };
+    
+    script.onerror = (error) => {
+      console.error('Error loading Google API script:', error);
+      reject(new Error('Google APIスクリプトの読み込みに失敗しました。ネットワーク接続を確認してください。'));
+    };
+    
     document.head.appendChild(script);
   });
 };
@@ -39,12 +63,18 @@ const initGoogleClient = async (): Promise<void> => {
     throw new Error('Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。');
   }
 
-  await (window as any).gapi.client.init({
-    apiKey: GOOGLE_API_KEY,
-    clientId: GOOGLE_CLIENT_ID,
-    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-    scope: SCOPES
-  });
+  try {
+    await (window as any).gapi.client.init({
+      apiKey: GOOGLE_API_KEY || undefined, // APIキーはオプション
+      clientId: GOOGLE_CLIENT_ID,
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+      scope: SCOPES
+    });
+    console.log('Google client initialized successfully');
+  } catch (error: any) {
+    console.error('Google client initialization error:', error);
+    throw new Error(`Google APIの初期化に失敗しました: ${error?.message || '不明なエラー'}`);
+  }
 };
 
 /**
@@ -77,8 +107,21 @@ export const signInToGoogle = async (): Promise<boolean> => {
 
     if (!isSignedIn) {
       console.log('Attempting to sign in...');
-      await authInstance.signIn();
-      console.log('Sign-in completed');
+      try {
+        const signInResult = await authInstance.signIn({
+          prompt: 'consent' // 常に同意画面を表示
+        });
+        console.log('Sign-in completed:', signInResult);
+      } catch (signInError: any) {
+        console.error('Sign-in attempt error:', signInError);
+        if (signInError?.error === 'popup_closed_by_user') {
+          throw new Error('ログインポップアップが閉じられました。再度お試しください。');
+        }
+        if (signInError?.error === 'access_denied') {
+          throw new Error('アクセスが拒否されました。権限を許可してください。');
+        }
+        throw signInError;
+      }
     }
 
     const finalStatus = authInstance.isSignedIn.get();
@@ -89,19 +132,32 @@ export const signInToGoogle = async (): Promise<boolean> => {
       error,
       message: error?.message,
       errorCode: error?.error,
-      errorDetails: error?.details
+      errorDetails: error?.details,
+      errorType: error?.type,
+      fullError: JSON.stringify(error, null, 2)
     });
-
+    
+    // エラーの種類に応じたメッセージ
     if (error?.error === 'popup_closed_by_user') {
-      throw new Error('ログインがキャンセルされました');
+      throw new Error('ログインポップアップが閉じられました。再度お試しください。');
     }
     if (error?.error === 'access_denied') {
       throw new Error('アクセスが拒否されました。権限を許可してください。');
     }
+    if (error?.error === 'idpiframe_initialization_failed') {
+      throw new Error('Google認証の初期化に失敗しました。ブラウザのポップアップブロッカーを無効にしてください。');
+    }
+    if (error?.error === 'popup_blocked') {
+      throw new Error('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。');
+    }
     if (error?.message) {
+      // より詳細なエラーメッセージを提供
+      if (error.message.includes('400')) {
+        throw new Error('OAuth設定に問題があります。Google Cloud Consoleで以下を確認してください：\n1. OAuth同意画面が公開されているか\n2. リダイレクトURIが正しく設定されているか\n3. テストユーザーに自分のアカウントが追加されているか');
+      }
       throw error;
     }
-    throw new Error(`ログインに失敗しました: ${error?.toString() || '不明なエラー'}`);
+    throw new Error(`ログインに失敗しました: ${error?.toString() || '不明なエラー'}\n\n詳細: ${JSON.stringify(error, null, 2)}`);
   }
 };
 

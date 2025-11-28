@@ -354,7 +354,7 @@ const App: React.FC = () => {
   // Google Drive保存ハンドラー
   const handleSaveToDrive = async () => {
     console.log('handleSaveToDrive called');
-    
+
     if (state.generatedImages.length === 0) {
       alert('保存する画像がありません');
       return;
@@ -379,12 +379,12 @@ const App: React.FC = () => {
 
     try {
       console.log('Starting Google Drive save process...');
-      
+
       // Googleにサインイン確認
       console.log('Checking sign-in status...');
       const signedIn = await isSignedIn();
       console.log('Sign-in status:', signedIn);
-      
+
       if (!signedIn) {
         console.log('Not signed in, attempting sign-in...');
         await signInToGoogle();
