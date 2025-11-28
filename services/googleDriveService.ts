@@ -27,10 +27,24 @@ const loadGoogleAPI = (): Promise<void> => {
     script.defer = true;
 
     script.onload = () => {
-      console.log('Google API script loaded, initializing client:auth2...');
+      console.log('Google API script loaded, checking gapi object...');
+      
+      // gapiオブジェクトが正しく読み込まれたか確認
+      if (!(window as any).gapi) {
+        reject(new Error('Google APIオブジェクトが見つかりません。スクリプトの読み込みに失敗した可能性があります。'));
+        return;
+      }
+
+      console.log('gapi object found, initializing client:auth2...');
+      
       try {
         // gapi.loadの正しい使用方法：コールバック関数を直接渡す
-        (window as any).gapi.load('client:auth2', () => {
+        (window as any).gapi.load('client:auth2', (error: any) => {
+          if (error) {
+            console.error('Error in gapi.load callback:', error);
+            reject(new Error('Google API client:auth2の読み込みに失敗しました: ' + (error?.message || '不明なエラー')));
+            return;
+          }
           console.log('Google API client:auth2 loaded successfully');
           resolve();
         });
@@ -57,17 +71,68 @@ const initGoogleClient = async (): Promise<void> => {
     throw new Error('Google Client IDが設定されていません。環境変数VITE_GOOGLE_CLIENT_IDを設定してください。');
   }
 
+  console.log('Initializing Google client with:', {
+    hasClientId: !!GOOGLE_CLIENT_ID,
+    clientIdLength: GOOGLE_CLIENT_ID.length,
+    hasApiKey: !!GOOGLE_API_KEY,
+    scopes: SCOPES
+  });
+
   try {
-    await (window as any).gapi.client.init({
-      apiKey: GOOGLE_API_KEY || undefined, // APIキーはオプション
+    // gapi.clientが利用可能か確認
+    if (!(window as any).gapi || !(window as any).gapi.client) {
+      throw new Error('Google APIが正しく読み込まれていません。ページを再読み込みしてください。');
+    }
+
+    const initConfig: any = {
       clientId: GOOGLE_CLIENT_ID,
       discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
       scope: SCOPES
+    };
+
+    // APIキーはオプション（設定されている場合のみ追加）
+    if (GOOGLE_API_KEY) {
+      initConfig.apiKey = GOOGLE_API_KEY;
+    }
+
+    console.log('Calling gapi.client.init with config:', {
+      ...initConfig,
+      clientId: initConfig.clientId.substring(0, 20) + '...' // セキュリティのため一部のみ表示
     });
+
+    await (window as any).gapi.client.init(initConfig);
     console.log('Google client initialized successfully');
   } catch (error: any) {
-    console.error('Google client initialization error:', error);
-    throw new Error(`Google APIの初期化に失敗しました: ${error?.message || '不明なエラー'}`);
+    console.error('Google client initialization error details:', {
+      error,
+      message: error?.message,
+      errorCode: error?.error,
+      errorDetails: error?.details,
+      stack: error?.stack,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+    });
+
+    // より詳細なエラーメッセージを提供
+    let errorMessage = 'Google APIの初期化に失敗しました';
+    
+    if (error?.error) {
+      errorMessage += `: ${error.error}`;
+    } else if (error?.message) {
+      errorMessage += `: ${error.message}`;
+    } else {
+      errorMessage += ': 不明なエラー';
+    }
+
+    // よくある問題に対する具体的なアドバイス
+    if (error?.message?.includes('invalid_client') || error?.error === 'invalid_client') {
+      errorMessage += '\n\n原因: Google Client IDが無効です。Vercelの環境変数VITE_GOOGLE_CLIENT_IDを確認してください。';
+    } else if (error?.message?.includes('unauthorized_client') || error?.error === 'unauthorized_client') {
+      errorMessage += '\n\n原因: OAuth同意画面が正しく設定されていません。Google Cloud ConsoleでOAuth同意画面を確認してください。';
+    } else if (error?.message?.includes('redirect_uri_mismatch') || error?.error === 'redirect_uri_mismatch') {
+      errorMessage += '\n\n原因: リダイレクトURIが一致しません。Google Cloud Consoleで承認済みのリダイレクトURIを確認してください。';
+    }
+
+    throw new Error(errorMessage);
   }
 };
 
